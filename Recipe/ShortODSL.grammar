@@ -1,0 +1,40 @@
+Story      ::= Scene | Story
+Scene      ::= MakeScene(characters, setting, plot, mood)
+characters ::= CharacterList(character*)
+character  ::= Character(name, role, description)
+setting    ::= MakeSetting(place, time, props)
+plot       ::= MakePlot(interactions, conflict, resolution)
+interaction::= Interaction(c1, c2, action)
+
+# Character Definitions
+CharacterList(character*) ::= character | characters
+Character(name, role, description)
+name        ::= String          # Character's name
+role        ::= String          # Character's role (e.g., protagonist, antagonist)
+description ::= String          # Short description of character's appearance and personality
+
+# Setting Definitions
+MakeSetting(place, time, props)
+place      ::= String           # Where the scene takes place (e.g., city, forest, room)
+time       ::= String           # Time setting (e.g., morning, future, year 2040)
+props      ::= PropList(prop*)  # List of objects in the scene
+
+# Plot Definitions
+MakePlot(interactions, conflict, resolution)
+interactions ::= InteractionList(interaction*)
+conflict     ::= String          # Central conflict (e.g., survival, revenge)
+resolution   ::= String          # How the conflict is resolved (e.g., the hero wins)
+
+# Interaction Definitions
+Interaction(c1, c2, action)
+c1, c2       ::= character       # Two characters involved in the interaction
+action       ::= String          # Describes what happens between c1 and c2 (e.g., "argue", "fight", "help each other")
+
+# Types and Helper Definitions
+PropList     ::= prop*           # List of props
+prop         ::= String          # A single prop description (e.g., "a golden key", "an old map")
+
+# Lists
+CharacterList ::= character*
+InteractionList ::= interaction*
+PropList ::= prop*

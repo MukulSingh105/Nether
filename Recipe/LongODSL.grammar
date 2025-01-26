@@ -1,0 +1,67 @@
+Story      ::= Scene | Story
+Scene      ::= MakeScene(characters, setting, plot, mood, weather)
+characters ::= CharacterList(character*)
+character  ::= Character(name, role, clothes, skin_tone, facial_features, personality, backstory)
+setting    ::= MakeSetting(place, timeline, environment, weather, props)
+plot       ::= MakePlot(interactions, conflict, resolution)
+interaction::= Interaction(c1, c2, action, dialogue)
+action     ::= Action(type, impact)
+dialogue   ::= Dialogue(c1, speech)
+
+# Character Definitions
+CharacterList(character*) ::= character | characters
+Character(name, role, clothes, skin_tone, facial_features, personality, backstory)
+name          ::= String         # Character's name
+role          ::= String         # Character's role (e.g., protagonist, antagonist, sidekick)
+clothes       ::= Clothes        # Describes what the character wears
+skin_tone     ::= SkinTone       # Describes the character's skin color
+facial_features ::= Features     # Describes face traits (e.g., eye color, hair, nose shape)
+personality   ::= Personality    # Key personality traits (e.g., brave, shy, cunning)
+backstory     ::= Backstory      # Background or history of the character
+
+# Setting Definitions
+MakeSetting(place, timeline, environment, weather, props)
+place       ::= Place            # Where the scene takes place (e.g., city, forest, room)
+timeline    ::= TimePeriod       # Time setting (past, present, future)
+environment ::= Environment      # Physical environment (e.g., dark, sunny, foggy, forest, urban)
+weather     ::= Weather          # Weather in the scene (e.g., raining, snowing, clear)
+props       ::= PropList(prop*)  # List of objects in the scene
+
+# Plot Definitions
+MakePlot(interactions, conflict, resolution)
+interactions ::= InteractionList(interaction*)
+conflict     ::= Conflict        # Central conflict (e.g., person vs person, person vs nature)
+resolution   ::= Resolution      # How the conflict resolves at the end
+
+# Interaction Definitions
+Interaction(c1, c2, action, dialogue)
+c1, c2       ::= character       # Two characters involved in the interaction
+action       ::= Action          # Actions performed during interaction
+dialogue     ::= Dialogue        # Dialogue between the characters
+
+# Action and Dialogue Definitions
+Action(type, impact)
+type         ::= String          # Type of action (e.g., fight, embrace, escape)
+impact       ::= Impact          # Consequence of the action (e.g., injury, emotional shift)
+Dialogue(c1, speech)
+speech       ::= String          # What the character says
+
+# Types and Helper Definitions
+Clothes      ::= String          # Describes clothing (e.g., "a red cape and leather boots")
+SkinTone     ::= String          # Skin color description (e.g., "pale", "dark brown")
+Features     ::= String          # Facial description (e.g., "blue eyes", "scar on cheek")
+Personality  ::= String          # Personality trait description (e.g., "arrogant", "kind-hearted")
+Backstory    ::= String          # Describes character's background
+Place        ::= String          # Location description (e.g., "medieval castle", "small town café")
+TimePeriod   ::= String          # Time setting (e.g., "year 1865", "the distant future")
+Environment  ::= String          # Environmental description (e.g., "misty forest", "busy street")
+Weather      ::= String          # Weather description (e.g., "rainy", "sunny", "snowstorm")
+PropList     ::= prop*           # List of props in the scene
+prop         ::= String          # Single prop description (e.g., "a rusty sword", "an ancient scroll")
+Conflict     ::= String          # Describes the nature of the conflict (e.g., "revenge", "survival")
+Resolution   ::= String          # How the conflict resolves (e.g., "the villain is defeated")
+
+# Lists
+CharacterList ::= character*
+InteractionList ::= interaction*
+PropList ::= prop*
