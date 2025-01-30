@@ -41,8 +41,7 @@ def segment_video(response):
         start_time = math.floor(float(segment.get("start_time", 0)))
         end_time = math.ceil(float(segment.get("end_time", 0))) + 2
         output_file = f"output{str(i).zfill(3)}.mp4"
-        command = trim_video("input_video.mp4", start_time, end_time, output_file)
-        subprocess.call(command, shell=True)
+        trim_video("input_video.mp4", start_time, end_time, output_file)
 
 
 #Face Detection function
