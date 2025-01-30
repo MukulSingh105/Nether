@@ -28,6 +28,7 @@ def trim_video(input_file, start_time, end_time, output_file):
         FFmpeg()
         .input(input_file, ss=start_time, to=end_time)
         .output(output_file, c='copy')
+        .execute()
     )
 
 # Example usage
@@ -50,11 +51,12 @@ def detect_faces(video_file):
 
     # Load the video
     cap = cv2.VideoCapture(video_file)
+    print(video_file)
 
     faces = []
 
     # Detect and store unique faces
-    while len(faces) < 5:
+    while len(faces) < 3:
         ret, frame = cap.read()
         if ret:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
