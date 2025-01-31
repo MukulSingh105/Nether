@@ -1,7 +1,10 @@
 from youtube_transcript_api import YouTubeTranscriptApi
 from pytube import YouTube
 from substrate import LLMClient
+import librosa
+import moviepy as mp
 import cv2
+import textwrap
 import subprocess
 import openai
 import numpy as np
@@ -46,40 +49,78 @@ def segment_video(response):
 
 
 #Face Detection function
-def detect_faces(video_file):
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+# def detect_faces(video_file):
+#     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
 
-    # Load the video
+#     # Load the video
+#     cap = cv2.VideoCapture(video_file)
+#     print(video_file)
+
+#     faces = []
+
+#     # Detect and store unique faces
+#     while len(faces) < 1:
+#         ret, frame = cap.read()
+#         if ret:
+#             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+#             detected_faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+#             # Iterate through the detected faces
+#             for face in detected_faces:
+#                 # Check if the face is already in the list of faces
+#                 if not any(np.array_equal(face, f) for f in faces):
+#                     faces.append(face)
+
+#             # Print the number of unique faces detected so far
+#             print(f"Number of unique faces detected: {len(faces)}")
+
+#     # Release the video capture object
+#     cap.release()
+
+#     # If faces detected, return the list of faces
+#     if len(faces) > 0:
+#         return faces
+
+#     # If no faces detected, return None
+#     return None
+
+def detect_human_faces(video_file):
+    # Load pre-trained deep learning model for face detection
+    net = cv2.dnn.readNetFromCaffe(
+        "deploy.prototxt", "res10_300x300_ssd_iter_140000.caffemodel"
+    )
+    
     cap = cv2.VideoCapture(video_file)
-    print(video_file)
-
     faces = []
-
-    # Detect and store unique faces
-    while len(faces) < 3:
+    
+    while len(faces) < 1:
         ret, frame = cap.read()
-        if ret:
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            detected_faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
-
-            # Iterate through the detected faces
-            for face in detected_faces:
-                # Check if the face is already in the list of faces
-                if not any(np.array_equal(face, f) for f in faces):
-                    faces.append(face)
-
-            # Print the number of unique faces detected so far
-            print(f"Number of unique faces detected: {len(faces)}")
-
-    # Release the video capture object
+        if not ret:
+            break
+        
+        h, w = frame.shape[:2]
+        blob = cv2.dnn.blobFromImage(frame, scalefactor=1.0, size=(300, 300), mean=(104.0, 177.0, 123.0))
+        net.setInput(blob)
+        detections = net.forward()
+        
+        detected_faces = []
+        
+        for i in range(detections.shape[2]):
+            confidence = detections[0, 0, i, 2]
+            if confidence > 0.5:  # Adjust threshold for accuracy
+                box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                (startX, startY, endX, endY) = box.astype("int")
+                detected_faces.append((confidence, (startX, startY, endX - startX, endY - startY)))
+        
+        if detected_faces:
+            detected_faces.sort(reverse=True, key=lambda x: x[0])  # Sort by confidence
+            faces = [face[1] for face in detected_faces]
+        
+        print(f"Number of unique human faces detected: {len(faces)}")
+    
     cap.release()
+    return faces if faces else None
 
-    # If faces detected, return the list of faces
-    if len(faces) > 0:
-        return faces
-
-    # If no faces detected, return None
-    return None
 
 
 def crop_video(faces, input_file, output_file):
@@ -143,6 +184,77 @@ def crop_video(faces, input_file, output_file):
         print(f"Error during video cropping: {str(e)}")
 
 
+def crop_video_to_primary_face(input_file, output_file):
+    # Constants for cropping
+    CROP_RATIO = 0.9  # Adjust the ratio to control how much of the face is visible in the cropped video
+    VERTICAL_RATIO = 9 / 16  # Aspect ratio for the vertical video
+
+    # Read the input video
+    cap = cv2.VideoCapture(input_file)
+
+    # Get the frame dimensions
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    # Calculate the target width and height for cropping (vertical format)
+    target_height = int(frame_height * CROP_RATIO)
+    target_width = int(target_height * VERTICAL_RATIO)
+    try:
+        cap = cv2.VideoCapture(input_file)
+        if not cap.isOpened():
+            print("Error: Could not open video.")
+            return
+
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        output_video = cv2.VideoWriter(output_file, fourcc, 30.0, (target_width, target_height))
+
+        face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + "haarcascade_frontalface_default.xml")
+        primary_face = None
+        smoothed_x, smoothed_y = 0, 0
+        alpha = 0.2  # Smoothing factor
+
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+
+            if len(faces) > 0:
+                faces = sorted(faces, key=lambda f: f[2] * f[3], reverse=True)
+                new_x, new_y, w, h = faces[0]
+                
+                if primary_face is None:
+                    smoothed_x, smoothed_y = new_x, new_y
+                else:
+                    smoothed_x = int(alpha * new_x + (1 - alpha) * smoothed_x)
+                    smoothed_y = int(alpha * new_y + (1 - alpha) * smoothed_y)
+                
+                primary_face = (smoothed_x, smoothed_y, w, h)
+            
+            if primary_face is not None:
+                x, y, w, h = primary_face
+                
+                crop_x = max(0, x + (w - target_width) // 2)
+                crop_y = max(0, y + (h - target_height) // 2)
+                crop_x2 = min(crop_x + target_width, frame_width)
+                crop_y2 = min(crop_y + target_height, frame_height)
+
+                cropped_frame = frame[crop_y:crop_y2, crop_x:crop_x2]
+                resized_frame = cv2.resize(cropped_frame, (target_width, target_height))
+                output_video.write(resized_frame)
+
+        cap.release()
+        output_video.release()
+        print("Video cropped successfully with smoothing.")
+    except Exception as e:
+        print(f"Error during video cropping: {str(e)}")
+
+
+
 def crop_video2(faces, input_file, output_file):
     try:
         if len(faces) > 0:
@@ -178,7 +290,7 @@ def crop_video2(faces, input_file, output_file):
                     break
                 frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)  # Convert frame to BGR color format
                 # Iterate through each detected face
-                for face in faces:
+                for face in faces[:1]:
                     # Unpack the face coordinates
                     x, y, w, h = face
 
@@ -214,6 +326,76 @@ def crop_video2(faces, input_file, output_file):
             print("No faces detected in the video.")
     except Exception as e:
         print(f"Error during video cropping: {str(e)}")
+
+
+def add_captions_to_video(input_file, output_file, transcript):
+    cap = cv2.VideoCapture(input_file)
+    if not cap.isOpened():
+        print("Error: Could not open video.")
+        return
+    
+    frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    output_video = cv2.VideoWriter(output_file, fourcc, 30.0, (frame_width, frame_height))
+    
+    frame_count = 0
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    caption_index = 0
+    
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        
+        if caption_index < len(transcript):
+            wrapped_text = textwrap.fill(transcript[caption_index]['text'], width=frame_width*0.8)
+            lines = wrapped_text.split('\n')
+            y_offset = frame_height - 100
+            for line in lines:
+                position = (frame_width // 4, y_offset)
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.8
+                color = (255, 255, 255)
+                thickness = 2
+                cv2.putText(frame, line, position, font, font_scale, color, thickness, cv2.LINE_AA)
+                y_offset += 30  # Move to the next line
+            
+            if frame_count % (total_frames // len(transcript)) == 0:
+                caption_index += 1
+
+        output_video.write(frame)
+        frame_count += 1
+    
+    cap.release()
+    output_video.release()
+    print("Captions added successfully.")
+
+
+def add_music_and_flashes(video_file, audio_file, output_file):
+    video = mp.VideoFileClip(video_file)
+    audio = mp.AudioFileClip(audio_file).with_volume_scaled(0.3)
+    if video.audio:
+        audio = mp.CompositeAudioClip([video.audio, mp.AudioFileClip(audio_file).with_volume_scaled(0.3)])
+    video.audio = (audio)
+    
+    y, sr = librosa.load(audio_file, sr=None)
+    onset_env = librosa.onset.onset_strength(y=y, sr=sr)
+    peaks = librosa.util.peak_pick(onset_env, pre_max=3, post_max=3, pre_avg=3, post_avg=5, delta=0.5, wait=10)
+    
+    frames = []
+    for i, frame in enumerate(video.iter_frames()):
+        if i in peaks:
+            flash_frame = cv2.convertScaleAbs(frame, alpha=1.5, beta=50)
+            frames.append(flash_frame)
+        else:
+            frames.append(frame)
+    
+    output_video = mp.ImageSequenceClip(frames, fps=video.fps)
+    output_video.audio = audio
+    output_video.write_videofile(output_file, codec='libx264')
+    print("Music and flashes added successfully.")
+
 
 def is_talking_in_batch(frames):
     # Calculate the motion between consecutive frames
@@ -260,8 +442,9 @@ def adjust_focus(frame, talking):
         if face_coordinates is not None:
             x, y, w, h = face_coordinates
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
     return frame
+
+
 def get_face_coordinates(frame):
     # Load the pre-trained Haar cascade classifier for face detection
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
@@ -355,10 +538,20 @@ def main():
     
     # Loop through each segment
     for i in range(0, 3):  # Replace 3 with the actual number of segments
+        start_time = parsed_content[i]['start_time']
+        end_time = parsed_content[i]['end_time']
+        transcript_subset = [entry for entry in transcript if entry['start'] >= start_time and entry['start'] + entry['duration'] <= end_time]
         input_file = f'output{str(i).zfill(3)}.mp4'
         output_file = f'output_cropped{str(i).zfill(3)}.mp4'
-        faces = detect_faces(input_file)
-        crop_video(faces, input_file, output_file)
+        # faces = detect_human_faces(input_file)
+        # crop_video(faces, input_file, output_file)
+        crop_video_to_primary_face(input_file, output_file)
+        output_file = f'output_cropped_captioned{str(i).zfill(3)}.mp4'
+        input_file = f'output_cropped{str(i).zfill(3)}.mp4'
+        add_captions_to_video(input_file, output_file, transcript_subset)
+        input_file = f'output_cropped_captioned{str(i).zfill(3)}.mp4'
+        output_file = f'output_cropped_captioned_music{str(i).zfill(3)}.mp4'
+        add_music_and_flashes(input_file, "motivational_background.mp3", output_file)
     
 
 # Run the main function
